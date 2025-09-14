@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Stability Monitor</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 20px;
+        }
+        
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            border-left: 4px solid #007bff;
+        }
+        
+        .stat-card.success {
+            border-left-color: #28a745;
+        }
+        
+        .stat-card.warning {
+            border-left-color: #ffc107;
+        }
+        
+        .stat-card.danger {
+            border-left-color: #dc3545;
+        }
+        
+        .stat-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .stat-label {
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        .chart-container {
+            height: 400px;
+            margin: 20px 0;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            background: white;
+        }
+        
+        .config-info {
+            background: #e9ecef;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 0.9em;
+            color: #495057;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        
+        .status-online {
+            background-color: #28a745;
+        }
+        
+        .status-offline {
+            background-color: #dc3545;
+        }
+        
+        .last-update {
+            text-align: center;
+            color: #666;
+            margin-top: 20px;
+            font-size: 0.9em;
+        }
+        
+        .loading {
+            text-align: center;
+            color: #666;
+            padding: 20px;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>Network Stability Monitor</h1>
+        
+        <div class="config-info">
+            <strong>Configuration:</strong> 
+            Monitoring {{ target }} | Timezone: {{ timezone }} | Data retention: {{ cleanup_days }} days
+        </div>
+        
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-value" id="total-pings">0</div>
+                <div class="stat-label">Total Pings</div>
+            </div>
+            <div class="stat-card success">
+                <div class="stat-value" id="success-rate">0%</div>
+                <div class="stat-label">Success Rate</div>
+            </div>
+            <div class="stat-card warning">
+                <div class="stat-value" id="avg-response">0ms</div>
+                <div class="stat-label">Avg Response Time</div>
+            </div>
+            <div class="stat-card danger">
+                <div class="stat-value" id="failed-pings">0</div>
+                <div class="stat-label">Failed Pings</div>
+            </div>
+        </div>
+        
+        <div class="chart-container">
+            <canvas id="pingChart"></canvas>
+        </div>
+        
+        <div class="last-update" id="last-update">
+            Loading data...
+        </div>
+    </div>
+
+    <script>
+        // Chart configuration
+        const ctx = document.getElementById('pingChart').getContext('2d');
+        const chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Response Time (ms)',
+                    data: [],
+                    borderColor: '#007bff',
+                    backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    pointRadius: 3,
+                    pointHoverRadius: 6
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Time'
+                        }
+                    },
+                    y: {
+                        title: {
+                            display: true,
+                            text: 'Response Time (ms)'
+                        },
+                        beginAtZero: true
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top'
+                    },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false,
+                        callbacks: {
+                            label: function(context) {
+                                const value = context.parsed.y;
+                                return value === null ? 'Failed' : `${value}ms`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        // Update functions
+        function updateStats(stats) {
+            document.getElementById('total-pings').textContent = stats.total_pings;
+            document.getElementById('success-rate').textContent = stats.success_rate.toFixed(1) + '%';
+            document.getElementById('avg-response').textContent = stats.avg_response_time + 'ms';
+            document.getElementById('failed-pings').textContent = stats.failed_pings;
+        }
+
+        function updateChart(data) {
+            const labels = [];
+            const responseData = [];
+            
+            data.forEach(entry => {
+                const date = new Date(entry.timestamp);
+                const timeStr = date.toLocaleTimeString();
+                labels.push(timeStr);
+                
+                // For failed pings, we'll show them as null to create gaps in the line
+                responseData.push(entry.success ? entry.response_time : null);
+            });
+            
+            chart.data.labels = labels;
+            chart.data.datasets[0].data = responseData;
+            chart.update('none'); // No animation for smoother updates
+        }
+
+        function loadData() {
+            Promise.all([
+                fetch('/api/data').then(r => r.json()),
+                fetch('/api/stats').then(r => r.json())
+            ])
+            .then(([data, stats]) => {
+                updateChart(data);
+                updateStats(stats);
+                
+                const now = new Date();
+                document.getElementById('last-update').innerHTML = 
+                    `Last updated: ${now.toLocaleTimeString()}`;
+            })
+            .catch(error => {
+                console.error('Error loading data:', error);
+                document.getElementById('last-update').innerHTML = 
+                    `<span style="color: #dc3545;">Error loading data</span>`;
+            });
+        }
+
+        // Initial load
+        loadData();
+        
+        // Auto-refresh every 30 seconds
+        setInterval(loadData, 30000);
+    </script>
+</body>
+</html>
