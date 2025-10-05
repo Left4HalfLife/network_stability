@@ -20,11 +20,6 @@ COPY . .
 # Create data directory
 RUN mkdir -p /app/data
 
-# Set environment variables
-ENV TIMEZONE=UTC
-ENV CLEANUP_DAYS=30
-ENV DATA_DIR=/app/data
-
 # Expose port
 EXPOSE 5000
 
