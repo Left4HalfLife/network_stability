@@ -111,6 +111,32 @@
             color: #666;
             padding: 20px;
         }
+
+        .date-picker-container {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        #date-picker {
+            padding: 10px;
+            border: 1px solid #007bff;
+            border-radius: 4px;
+            margin-right: 10px;
+            width: 200px;
+        }
+
+        button {
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -121,6 +147,12 @@
         <div class="config-info">
             <strong>Configuration:</strong> 
             Monitoring {{ target }} | Timezone: {{ timezone }} | Data retention: {{ cleanup_days }} days
+        </div>
+
+        <div class="date-picker-container">
+            <label for="date-picker">Select Date: </label>
+            <input type="date" id="date-picker" max="{{ timezone|tojson }}">
+            <button onclick="loadDataByDate()">Load Data</button>
         </div>
         
         <div class="stats">
@@ -250,6 +282,39 @@
                 document.getElementById('last-update').innerHTML = 
                     `<span style="color: #dc3545;">Error loading data</span>`;
             });
+        }
+
+        function loadDataByDate() {
+            const datePicker = document.getElementById('date-picker');
+            const selectedDate = datePicker.value;
+
+            if (!selectedDate) {
+                alert('Please select a date.');
+                return;
+            }
+
+            fetch(`/api/data/${selectedDate}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.message) {
+                        document.getElementById('last-update').innerHTML = `<span style='color: #dc3545;'>${data.message}</span>`;
+                        updateChart([]);
+                        updateStats({ total_pings: 0, successful_pings: 0, failed_pings: 0, success_rate: 0, avg_response_time: 0 });
+                    } else {
+                        updateChart(data);
+                        updateStats({
+                            total_pings: data.length,
+                            successful_pings: data.filter(d => d.success).length,
+                            failed_pings: data.filter(d => !d.success).length,
+                            success_rate: (data.filter(d => d.success).length / data.length) * 100,
+                            avg_response_time: data.filter(d => d.success).reduce((sum, d) => sum + d.response_time, 0) / data.filter(d => d.success).length || 0
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading data for date:', error);
+                    document.getElementById('last-update').innerHTML = `<span style='color: #dc3545;'>Error loading data for selected date</span>`;
+                });
         }
 
         // Initial load

@@ -170,6 +170,22 @@ def get_data():
         return jsonify([])
 
 
+@app.route('/api/data/<date>')
+def get_data_by_date(date):
+    """API endpoint to get ping data for a specific date."""
+    try:
+        # Construct the filename for the given date
+        filename = os.path.join(DATA_DIR, f'ping_data_{date}.json')
+
+        with open(filename, 'r') as f:
+            data = json.load(f)
+        return jsonify(data)
+    except FileNotFoundError:
+        return jsonify({'message': 'no file found on specified date'})
+    except json.JSONDecodeError:
+        return jsonify({'message': 'error reading data file'})
+
+
 @app.route('/api/stats')
 def get_stats():
     """API endpoint to get basic statistics."""
@@ -220,4 +236,4 @@ if __name__ == '__main__':
     ping_thread.start()
     
     # Start Flask app
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    app.run(host='0.0.0.0', port=5002, debug=False)

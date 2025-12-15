@@ -1,15 +1,10 @@
-version: '3.8'
+version: '3.9'
 
 services:
   network-stability:
     build: .
     ports:
-      - "5000:5000"
-    environment:
-      - TIMEZONE=UTC
-      - CLEANUP_DAYS=30
-      - DATA_DIR=/app/data
-      - MOCK_PING=false  # Set to true for testing in environments without ping
+      - "5002:5002"
     volumes:
       - ./data:/app/data  # Persist data outside container
     restart: unless-stopped
