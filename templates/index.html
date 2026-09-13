@@ -172,6 +172,14 @@
                 <div class="stat-value" id="failed-pings">0</div>
                 <div class="stat-label">Failed Pings</div>
             </div>
+            <div class="stat-card warning">
+                <div class="stat-value" id="dropouts-7days">0 min</div>
+                <div class="stat-label">Dropouts Last 7 Days</div>
+            </div>
+            <div class="stat-card danger">
+                <div class="stat-value" id="avg-dropouts-day">0 min</div>
+                <div class="stat-label">Avg Dropouts Per Day (7 days)</div>
+            </div>
         </div>
         
         <div class="chart-container">
@@ -239,11 +247,16 @@
         });
 
         // Update functions
-        function updateStats(stats) {
+        function updateStats(stats, dropoutStats = null) {
             document.getElementById('total-pings').textContent = stats.total_pings;
             document.getElementById('success-rate').textContent = stats.success_rate.toFixed(1) + '%';
             document.getElementById('avg-response').textContent = stats.avg_response_time + 'ms';
             document.getElementById('failed-pings').textContent = stats.failed_pings;
+            
+            if (dropoutStats) {
+                document.getElementById('dropouts-7days').textContent = dropoutStats.total_dropouts_seconds.toFixed(1) + ' min';
+                document.getElementById('avg-dropouts-day').textContent = dropoutStats.avg_dropouts_per_day_seconds.toFixed(1) + ' min';
+            }
         }
 
         function updateChart(data) {
@@ -267,11 +280,12 @@
         function loadData() {
             Promise.all([
                 fetch('/api/data').then(r => r.json()),
-                fetch('/api/stats').then(r => r.json())
+                fetch('/api/stats').then(r => r.json()),
+                fetch('/api/dropout-stats').then(r => r.json())
             ])
-            .then(([data, stats]) => {
+            .then(([data, stats, dropoutStats]) => {
                 updateChart(data);
-                updateStats(stats);
+                updateStats(stats, dropoutStats);
                 
                 const now = new Date();
                 document.getElementById('last-update').innerHTML = 
@@ -293,13 +307,15 @@
                 return;
             }
 
-            fetch(`/api/data/${selectedDate}`)
-                .then(response => response.json())
-                .then(data => {
+            Promise.all([
+                fetch(`/api/data/${selectedDate}`).then(r => r.json()),
+                fetch('/api/dropout-stats').then(r => r.json())
+            ])
+            .then(([data, dropoutStats]) => {
                     if (data.message) {
                         document.getElementById('last-update').innerHTML = `<span style='color: #dc3545;'>${data.message}</span>`;
                         updateChart([]);
-                        updateStats({ total_pings: 0, successful_pings: 0, failed_pings: 0, success_rate: 0, avg_response_time: 0 });
+                        updateStats({ total_pings: 0, successful_pings: 0, failed_pings: 0, success_rate: 0, avg_response_time: 0 }, dropoutStats);
                     } else {
                         updateChart(data);
                         updateStats({
@@ -308,7 +324,7 @@
                             failed_pings: data.filter(d => !d.success).length,
                             success_rate: (data.filter(d => d.success).length / data.length) * 100,
                             avg_response_time: data.filter(d => d.success).reduce((sum, d) => sum + d.response_time, 0) / data.filter(d => d.success).length || 0
-                        });
+                        }, dropoutStats);
                     }
                 })
                 .catch(error => {

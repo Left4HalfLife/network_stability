@@ -123,6 +123,51 @@ def save_ping_result(response_time, timestamp):
         json.dump(data, f, indent=2)
 
 
+def calculate_7day_dropout_stats():
+    """Calculate dropout statistics for the last 7 days."""
+    try:
+        tz = pytz.timezone(TIMEZONE)
+        now = datetime.now(tz)
+        cutoff_date = (now - timedelta(days=7)).strftime('%Y-%m-%d')
+        
+        total_dropouts = 0.0
+        dropout_days = set()
+        
+        for file_path in Path(DATA_DIR).glob('ping_data_*.json'):
+            try:
+                date_str = file_path.stem.replace('ping_data_', '')
+                if date_str < cutoff_date:
+                    continue
+                
+                with open(file_path, 'r') as f:
+                    data = json.load(f)
+                
+                consecutive_failures = 0
+                for entry in data:
+                    if not entry['success']:
+                        consecutive_failures += 1
+                    else:
+                        total_dropouts += consecutive_failures * 60.0  # Convert minutes to seconds
+                        dropout_days.add(entry['timestamp'].split('T')[0])
+                        consecutive_failures = 0
+                
+                # Add any remaining failures at end of file
+                total_dropouts += consecutive_failures * 60.0
+            
+            except (json.JSONDecodeError, OSError):
+                continue
+        
+        avg_per_day = total_dropouts / len(dropout_days) if dropout_days else 0.0
+        
+        return {
+            'total_dropouts_seconds': round(total_dropouts, 2),
+            'avg_dropouts_per_day_seconds': round(avg_per_day, 2)
+        }
+    except Exception as e:
+        app.logger.error(f"Error calculating dropout stats: {e}")
+        return {'total_dropouts_seconds': 0.0, 'avg_dropouts_per_day_seconds': 0.0}
+
+
 def ping_worker():
     """Background worker to ping every minute."""
     app.logger.info("Starting ping worker")
@@ -228,6 +273,12 @@ def get_stats():
             'success_rate': 0,
             'avg_response_time': 0
         })
+
+
+@app.route('/api/dropout-stats')
+def get_dropout_stats():
+    """API endpoint to get dropout statistics for the last 7 days."""
+    return jsonify(calculate_7day_dropout_stats())
 
 
 if __name__ == '__main__':
